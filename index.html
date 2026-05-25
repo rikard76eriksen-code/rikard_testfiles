@@ -454,9 +454,12 @@ select {
 
 <script>
 const API = 'https://eksternapi.fdvweb.no';
+const TOKEN_PROXY = '/.netlify/functions/token';
 let token = null;
 let authOpen = true;
 let rawOpen = false;
+
+// Vis advarsel hvis Worker ikke er konfigurert
 
 /* ── UI helpers ── */
 function toggleAuth() {
@@ -506,7 +509,7 @@ async function getToken() {
   const basic = btoa(cid + ':' + csec);
 
   try {
-    const r = await fetch(`${API}/connect/token/`, {
+    const r = await fetch(TOKEN_PROXY, {
       method: 'POST',
       headers: {
         'Content-Type':  'application/x-www-form-urlencoded',
