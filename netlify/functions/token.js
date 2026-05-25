@@ -1,10 +1,10 @@
 const https = require('https');
 const url   = require('url');
 
-exports.handler = async (event) => {
+exports.handler = async (event, context) => {
   const CORS = {
     'Access-Control-Allow-Origin':  '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   };
 
@@ -12,17 +12,12 @@ exports.handler = async (event) => {
     return { statusCode: 204, headers: CORS, body: '' };
   }
 
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, headers: CORS, body: 'Method Not Allowed' };
-  }
-
   const TARGET = 'https://eksternapi.fdvweb.no/connect/token/';
   const parsed = new url.URL(TARGET);
+  const body   = event.body || 'grant_type=client_credentials';
+  const auth   = (event.headers && (event.headers.authorization || event.headers.Authorization)) || '';
 
   return new Promise((resolve) => {
-    const body = event.body || '';
-    const auth = (event.headers && event.headers.authorization) || '';
-
     const options = {
       hostname: parsed.hostname,
       port: 443,
