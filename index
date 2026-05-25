@@ -241,6 +241,55 @@ select {
 /* ─── Chevron ─── */
 .chev { transition: transform 0.2s; font-size: 10px; color: var(--hint); }
 .chev.open { transform: rotate(180deg); }
+
+/* ─── Bygg search ─── */
+.bygg-input-row { display: flex; gap: 8px; align-items: stretch; }
+.bygg-input-row input { flex: 1; min-width: 0; }
+.btn-search {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 10px 13px; background: var(--raised); color: var(--muted);
+  border: 0.5px solid var(--border-m); border-radius: var(--r);
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: background 0.15s, color 0.15s; white-space: nowrap;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-search:hover  { background: rgba(79,124,255,0.12); color: var(--accent); border-color: rgba(79,124,255,0.3); }
+.btn-search:active { transform: scale(0.97); }
+.btn-search:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+.bygg-dropdown {
+  display: none; flex-direction: column;
+  background: var(--raised); border: 0.5px solid var(--border-m);
+  border-radius: var(--r); overflow: hidden;
+  max-height: 260px; overflow-y: auto;
+}
+.bygg-dropdown.open { display: flex; }
+
+.bygg-item {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 12px; cursor: pointer;
+  border-bottom: 0.5px solid var(--border);
+  transition: background 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.bygg-item:last-child { border-bottom: none; }
+.bygg-item:hover, .bygg-item:active { background: rgba(79,124,255,0.08); }
+.bygg-item.selected { background: rgba(79,124,255,0.12); }
+.bygg-item-name { font-size: 14px; font-weight: 500; color: var(--text); }
+.bygg-item-meta { font-size: 11px; color: var(--hint); display: flex; gap: 8px; flex-wrap: wrap; }
+.bygg-item-id   { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; color: var(--accent); background: rgba(79,124,255,0.1); padding: 1px 5px; border-radius: 4px; }
+
+.bygg-search-input {
+  padding: 9px 12px;
+  border-bottom: 0.5px solid var(--border);
+  font-size: 13px; color: var(--text);
+  background: var(--surface);
+  border-radius: 0;
+}
+.bygg-search-input:focus { border-color: var(--border); box-shadow: none; border-bottom-color: var(--accent); }
+
+.bygg-empty { padding: 14px 12px; font-size: 13px; color: var(--hint); text-align: center; }
 </style>
 </head>
 <body>
@@ -293,9 +342,19 @@ select {
     <div class="card-head">Lokasjon</div>
     <div class="card-body">
       <div class="field">
-        <label>Bygg-ID <span class="req">*</span></label>
-        <input id="bygg" placeholder="f.eks. bygg123" autocorrect="off" autocapitalize="none" spellcheck="false"/>
-        <div class="hint-text">Teknisk bygg-ID fra FDVweb (ByggNavnId). Hentes fra <code style="font-size:10px;color:var(--accent)">/Bygg</code></div>
+        <label>Bygg <span class="req">*</span></label>
+        <div class="bygg-input-row">
+          <input id="bygg" placeholder="Bygg-ID, f.eks. bygg123" autocorrect="off" autocapitalize="none" spellcheck="false" oninput="onByggInput()"/>
+          <button class="btn-search" onclick="searchBygg()" id="searchBtn" title="Søk opp bygg">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Søk
+          </button>
+        </div>
+        <div class="bygg-dropdown" id="byggDropdown">
+          <input class="bygg-search-input" id="byggFilter" placeholder="Filtrer bygg…" oninput="filterBygg()" autocorrect="off" autocapitalize="none"/>
+          <div id="byggList"></div>
+        </div>
+        <div class="hint-text" id="byggHint">Skriv inn Bygg-ID manuelt, eller trykk Søk for å hente liste fra FDVweb</div>
       </div>
     </div>
   </div>
@@ -556,10 +615,96 @@ async function submitOrder() {
   }
 }
 
-/* ── Reset ── */
+/* ── Bygg-søk ── */
+let allBygg = [];
+
+function onByggInput() {
+  // Skjul dropdown hvis bruker skriver manuelt
+  const dd = document.getElementById('byggDropdown');
+  if (dd.classList.contains('open')) {
+    dd.classList.remove('open');
+  }
+}
+
+async function searchBygg() {
+  if (!token) { setAlert('err2', 'Hent token først.'); return; }
+
+  const btn = document.getElementById('searchBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="border-top-color:var(--muted)"></div> Henter…';
+
+  try {
+    const r = await fetch(`${API}/Bygg`, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    allBygg = await r.json();
+    renderByggList(allBygg);
+    document.getElementById('byggDropdown').classList.add('open');
+    document.getElementById('byggFilter').value = '';
+    document.getElementById('byggFilter').focus();
+  } catch (e) {
+    setAlert('err2', 'Kunne ikke hente bygg: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Søk';
+  }
+}
+
+function filterBygg() {
+  const q = document.getElementById('byggFilter').value.toLowerCase();
+  const filtered = allBygg.filter(b =>
+    (b.byggNavnId || '').toLowerCase().includes(q) ||
+    (b.byggNavn   || '').toLowerCase().includes(q) ||
+    (b.adresse    || '').toLowerCase().includes(q)
+  );
+  renderByggList(filtered);
+}
+
+function renderByggList(list) {
+  const el = document.getElementById('byggList');
+  if (!list.length) {
+    el.innerHTML = '<div class="bygg-empty">Ingen bygg funnet</div>';
+    return;
+  }
+  el.innerHTML = list.map(b => `
+    <div class="bygg-item" onclick="selectBygg('${escHtml(b.byggNavnId)}', '${escHtml(b.byggNavn || b.bygningsnavn || '')}', '${escHtml(b.adresse || '')}')">
+      <div class="bygg-item-name">${escHtml(b.byggNavn || b.bygningsnavn || b.byggNavnId)}</div>
+      <div class="bygg-item-meta">
+        <span class="bygg-item-id">${escHtml(b.byggNavnId)}</span>
+        ${b.adresse ? `<span>${escHtml(b.adresse)}</span>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectBygg(id, navn, adresse) {
+  document.getElementById('bygg').value = id;
+  document.getElementById('byggDropdown').classList.remove('open');
+  const hint = document.getElementById('byggHint');
+  hint.innerHTML = `Valgt: <strong style="color:var(--text)">${escHtml(navn || id)}</strong>${adresse ? ' · ' + escHtml(adresse) : ''}`;
+  hideAlert();
+}
+
+function escHtml(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// Lukk dropdown ved klikk utenfor
+document.addEventListener('click', e => {
+  const dd   = document.getElementById('byggDropdown');
+  const btn  = document.getElementById('searchBtn');
+  const inp  = document.getElementById('bygg');
+  const filt = document.getElementById('byggFilter');
+  if (!dd.contains(e.target) && e.target !== btn && e.target !== inp && !btn.contains(e.target)) {
+    dd.classList.remove('open');
+  }
+});
 function resetForm() {
   ['bygg','navn','utforelse','beskrivelse','utsteder','utstederEpost','frist','eksternId','sak','prioritet']
     .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('byggDropdown').classList.remove('open');
+  document.getElementById('byggHint').innerHTML = 'Skriv inn Bygg-ID manuelt, eller trykk Søk for å hente liste fra FDVweb';
   hideAlert();
   document.getElementById('result').className = 'result';
   document.getElementById('rawWrap').style.display = 'none';
